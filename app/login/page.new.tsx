@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import AuthShell from '../components/auth-shell';
 import { supabase } from '../../lib/supabase';
 
@@ -11,8 +11,42 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkSession = async () => {
+      const response = await supabase.auth.getSession();
+      const session = response.data.session;
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (session) {
+        router.replace('/dashboard');
+        return;
+      }
+
+      setIsCheckingSession(false);
+    };
+
+    checkSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        router.replace('/dashboard');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,6 +105,12 @@ export default function LoginPage() {
         </>
       }
     >
+      {isCheckingSession ? (
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-600">
+          Checking your session…
+        </div>
+      ) : null}
+
       <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <div>
           <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
@@ -121,7 +161,7 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || isCheckingSession}
           className="flex w-full items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading ? 'Signing in…' : 'Sign in'}

@@ -9,7 +9,9 @@ import { supabase } from '../../lib/supabase';
 export default function RegisterSchoolPage() {
   const router = useRouter();
   const [schoolName, setSchoolName] = useState('');
-  const [email, setEmail] = useState('');
+  const [schoolEmail, setSchoolEmail] = useState('');
+  const [adminFullName, setAdminFullName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,55 +23,97 @@ export default function RegisterSchoolPage() {
     setError('');
     setSuccess('');
 
-    if (!schoolName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-      setError('Please fill in the school name, email, and password fields.');
+    // Validate all fields are filled
+    if (
+      !schoolName.trim() ||
+      !schoolEmail.trim() ||
+      !adminFullName.trim() ||
+      !adminEmail.trim() ||
+      !password.trim() ||
+      !confirmPassword.trim()
+    ) {
+      setError('Please fill in all fields.');
       return;
     }
 
+    // Validate school name length
+    if (schoolName.trim().length < 2) {
+      setError('School name must be at least 2 characters long.');
+      return;
+    }
+
+    // Validate admin full name length
+    if (adminFullName.trim().length < 2) {
+      setError('Admin full name must be at least 2 characters long.');
+      return;
+    }
+
+    // Validate password length
     if (password.length < 8) {
-      setError('Password should be at least 8 characters long.');
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
+    // Validate passwords match
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
+    // Validate email format
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(email.trim())) {
-      setError('Please enter a valid email address.');
+    if (!emailPattern.test(schoolEmail.trim())) {
+      setError('Please enter a valid school email address.');
+      return;
+    }
+
+    if (!emailPattern.test(adminEmail.trim())) {
+      setError('Please enter a valid admin email address.');
       return;
     }
 
     setIsLoading(true);
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
-    });
-    setIsLoading(false);
 
-    if (signUpError) {
-      setError(signUpError.message);
-      return;
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: adminEmail.trim(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+
+      setIsLoading(false);
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.user?.identities?.length === 0) {
+        setError(
+          'An account with this email already exists. Please try signing in instead.',
+        );
+        return;
+      }
+
+      setSuccess('Account created successfully! Redirecting to login...');
+      setSchoolName('');
+      setSchoolEmail('');
+      setAdminFullName('');
+      setAdminEmail('');
+      setPassword('');
+      setConfirmPassword('');
+
+      // Redirect after a short delay to show the success message
+      setTimeout(() => {
+        router.push('/login');
+      }, 1500);
+    } catch (err) {
+      setIsLoading(false);
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Registration error:', err);
     }
-
-    if (data.user?.identities?.length === 0) {
-      setError('An account with this email already exists. Please sign in instead.');
-      return;
-    }
-
-    setSuccess(
-      `A verification email has been sent to ${email}. Please confirm it before signing in.`,
-    );
-    setSchoolName('');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    router.push('/login');
   };
 
   return (
@@ -102,16 +146,46 @@ export default function RegisterSchoolPage() {
         </div>
 
         <div>
-          <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-700">
-            Administrator email
+          <label htmlFor="schoolEmail" className="mb-2 block text-sm font-medium text-slate-700">
+            School email
           </label>
           <input
-            id="email"
+            id="schoolEmail"
             type="email"
             autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="admin@example.edu"
+            value={schoolEmail}
+            onChange={(event) => setSchoolEmail(event.target.value)}
+            placeholder="contact@school.edu"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="adminFullName" className="mb-2 block text-sm font-medium text-slate-700">
+            Admin full name
+          </label>
+          <input
+            id="adminFullName"
+            type="text"
+            autoComplete="name"
+            value={adminFullName}
+            onChange={(event) => setAdminFullName(event.target.value)}
+            placeholder="John Doe"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="adminEmail" className="mb-2 block text-sm font-medium text-slate-700">
+            Admin email
+          </label>
+          <input
+            id="adminEmail"
+            type="email"
+            autoComplete="email"
+            value={adminEmail}
+            onChange={(event) => setAdminEmail(event.target.value)}
+            placeholder="admin@school.edu"
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-100"
           />
         </div>
@@ -163,7 +237,14 @@ export default function RegisterSchoolPage() {
           disabled={isLoading}
           className="flex w-full items-center justify-center rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isLoading ? 'Creating account…' : 'Create school account'}
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-cyan-600"></span>
+              Creating account…
+            </span>
+          ) : (
+            'Create school account'
+          )}
         </button>
       </form>
     </AuthShell>
