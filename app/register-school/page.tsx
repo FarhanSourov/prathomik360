@@ -83,17 +83,49 @@ export default function RegisterSchoolPage() {
         },
       });
 
-      setIsLoading(false);
-
       if (signUpError) {
         setError(signUpError.message);
         return;
       }
 
-      if (data.user?.identities?.length === 0) {
+      if (!data.user) {
+        setError('We could not create your account. Please try again.');
+        return;
+      }
+
+      if (data.user.identities?.length === 0) {
         setError(
           'An account with this email already exists. Please try signing in instead.',
         );
+        return;
+      }
+
+      const { data: schoolData, error: schoolError } = await supabase
+        .from('schools')
+        .insert({
+          name: schoolName.trim(),
+          email: schoolEmail.trim(),
+          status: 'active',
+        })
+        .select('id')
+        .single();
+
+      if (schoolError || !schoolData) {
+        setError(`We could not create your school record. ${schoolError?.message ?? 'Please try again.'}`);
+        return;
+      }
+
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: data.user.id,
+        school_id: schoolData.id,
+        full_name: adminFullName.trim(),
+        email: adminEmail.trim(),
+        role: 'school_admin',
+      });
+
+      if (profileError) {
+        await supabase.from('schools').delete().eq('id', schoolData.id);
+        setError(`We could not create your admin profile. ${profileError.message}`);
         return;
       }
 
@@ -105,14 +137,14 @@ export default function RegisterSchoolPage() {
       setPassword('');
       setConfirmPassword('');
 
-      // Redirect after a short delay to show the success message
       setTimeout(() => {
         router.push('/login');
       }, 1500);
     } catch (err) {
-      setIsLoading(false);
       setError('An unexpected error occurred. Please try again.');
       console.error('Registration error:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
